@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AdSense Isolation Test — TV Finance</title>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; background:#0d1424; color:#e8ecf5; margin:0; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.sub { color:#8fa0c4; margin:0 0 20px; font-size:14px; }
+  .panel { background:#121c33; border:1px solid #2c3c66; border-radius:10px; padding:16px; margin-bottom:18px; }
+  .panel h2 { font-size:14px; text-transform:uppercase; letter-spacing:0.5px; color:#8fa0c4; margin:0 0 10px; }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #22304f; font-size:15px; }
+  .row:last-child { border-bottom:none; }
+  .ok { color:#2ecc71; font-weight:700; }
+  .bad { color:#e74c3c; font-weight:700; }
+  .pending { color:#f1c40f; font-weight:700; }
+  #log { font-family: ui-monospace, Menlo, monospace; font-size:12px; white-space:pre-wrap; background:#0a1120; border-radius:6px; padding:10px; max-height:220px; overflow:auto; border:1px solid #22304f; }
+  #heartbeatNum { font-variant-numeric: tabular-nums; font-weight:800; color:#4da3ff; }
+  .adhost { background:#0d1424; border:1px dashed #2c3c66; border-radius:8px; padding:10px; display:flex; align-items:center; justify-content:center; min-height:80px; }
+  .instructions { font-size:14px; line-height:1.6; color:#c7d2e8; }
+  .instructions b { color:#fff; }
+  code { background:#0a1120; padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+
+<h1>AdSense Isolation Test</h1>
+<p class="sub">Just the raw Google-provided ad snippet, plus a built-in live status panel — no browser DevTools needed to read the result.</p>
+
+<div class="panel">
+  <h2>Live status (updates automatically, no console needed)</h2>
+  <div class="row"><span>Page script started</span><span id="statusStart" class="pending">…</span></div>
+  <div class="row"><span>Page script finished (top-level code ran to completion)</span><span id="statusFinished" class="pending">…</span></div>
+  <div class="row"><span>Heartbeat — still ticking = page is NOT frozen</span><span id="heartbeatNum">0</span></div>
+  <div class="row"><span>AdSense loader script</span><span id="statusAdScript" class="pending">waiting…</span></div>
+  <div class="row"><span>Ad slot fill status</span><span id="statusAdFill" class="pending">waiting…</span></div>
+  <div class="row"><span>Any JS errors caught</span><span id="statusErrors" class="ok">none yet</span></div>
+</div>
+
+<div class="panel">
+  <h2>Error / event log</h2>
+  <div id="log">(nothing logged yet)</div>
+</div>
+
+<div class="panel">
+  <h2>The actual ad unit — exactly as Google gave it to you (Left, 468x60, fixed size)</h2>
+  <div class="adhost">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9382279976555454"
+            crossorigin="anonymous"></script>
+    <ins class="adsbygoogle"
+         style="display:inline-block;width:468px;height:60px"
+         data-ad-client="ca-pub-9382279976555454"
+         data-ad-slot="3309489922"></ins>
+    <script>
+      (adsbygoogle = window.adsbygoogle || []).push({});
+    </script>
+  </div>
+</div>
+
+<div class="panel instructions">
+  <h2 style="color:#c7d2e8;">What to check and report back</h2>
+  <p>
+    <b>1.</b> Upload this single file to any real public host — the free/fastest options:
+    <br>• <b>GitHub Pages</b> (if you have a GitHub account: create a repo, enable Pages, drop this file in as <code>index.html</code>)
+    <br>• <b>Netlify Drop</b> at <code>app.netlify.com/drop</code> — literally drag-and-drop this file, no account needed, gives you a live URL in seconds
+  </p>
+  <p><b>2.</b> Open the resulting URL in a normal browser (phone or computer, doesn't matter).</p>
+  <p><b>3.</b> Look at the panel at the top — <b>you don't need DevTools at all</b>, just watch this page:</p>
+  <p>
+    <b>• If the heartbeat number keeps counting up</b> — the page is alive and NOT frozen, even if no ad ever visibly appears. That would mean the freeze you saw before is specific to <code>file://</code> or the packaged Tizen app context, not a fundamental AdSense problem — very fixable via Ad Manager or a proper hosted domain.
+    <br><b>• If the heartbeat stops/never starts</b> — same freeze reproduces even on a real, public domain. That points at the AdSense account/approval side, not the environment.
+  </p>
+  <p>Screenshot the whole status panel (top section) once it's settled for ~10 seconds, and send it back — that alone answers the question, no console digging required.</p>
+</div>
+
+<script>
+  (function () {
+    var logEl = document.getElementById("log");
+    var lines = [];
+    function log(msg) {
+      lines.push("[" + new Date().toLocaleTimeString() + "] " + msg);
+      logEl.textContent = lines.join("\n");
+    }
+
+    function setStatus(id, text, cls) {
+      var el = document.getElementById(id);
+      el.textContent = text;
+      el.className = cls;
+    }
+
+    setStatus("statusStart", "yes — top-level script began executing", "ok");
+    log("Page script started.");
+
+    var errorCount = 0;
+    window.addEventListener("error", function (e) {
+      errorCount++;
+      setStatus("statusErrors", errorCount + " error(s) — see log below", "bad");
+      log("JS ERROR: " + (e.message || "unknown") + (e.filename ? " @ " + e.filename + ":" + e.lineno : ""));
+    });
+    window.addEventListener("unhandledrejection", function (e) {
+      errorCount++;
+      setStatus("statusErrors", errorCount + " error(s) — see log below", "bad");
+      log("UNHANDLED PROMISE REJECTION: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
+    });
+
+    // Heartbeat — if this stops incrementing, the JS event loop itself is
+    // stuck/frozen, which is the clearest possible "is it really frozen"
+    // signal without needing DevTools.
+    var beats = 0;
+    setInterval(function () {
+      beats++;
+      document.getElementById("heartbeatNum").textContent = beats;
+    }, 500);
+
+    // Confirms the synchronous top-level script block finished running —
+    // if THIS never fires, something earlier in this file's own script
+    // threw before reaching here (would also show in the error log above).
+    setTimeout(function () {
+      setStatus("statusFinished", "yes — reached end of page script", "ok");
+      log("Top-level script finished executing normally.");
+    }, 0);
+
+    // Poll for the AdSense loader script actually attaching / erroring.
+    var adScriptCheckStart = Date.now();
+    var adScriptTimer = setInterval(function () {
+      if (window.adsbygoogle && window.adsbygoogle.loaded) {
+        setStatus("statusAdScript", "loaded successfully", "ok");
+        log("adsbygoogle.js reports loaded = true.");
+        clearInterval(adScriptTimer);
+      } else if (Date.now() - adScriptCheckStart > 8000) {
+        setStatus("statusAdScript", "never confirmed loaded after 8s (blocked, slow, or errored — see Network tab if available)", "bad");
+        log("adsbygoogle.js did not report loaded=true within 8s.");
+        clearInterval(adScriptTimer);
+      }
+    }, 300);
+
+    // Check whether the ad slot actually filled.
+    setTimeout(function () {
+      var ins = document.querySelector("ins.adsbygoogle");
+      var status = ins ? ins.getAttribute("data-ad-status") : null;
+      if (status === "filled") {
+        setStatus("statusAdFill", "filled — real ad rendered", "ok");
+        log("Ad slot filled successfully.");
+      } else if (status === "unfilled") {
+        setStatus("statusAdFill", "unfilled (no ad returned, but page is fine)", "pending");
+        log("Ad slot explicitly unfilled — normal, means the page itself works.");
+      } else {
+        setStatus("statusAdFill", "no status attribute set (status: " + status + ")", "bad");
+        log("Ad slot has no clear fill status after 5s.");
+      }
+    }, 5000);
+  })();
+</script>
+
+</body>
+</html>
